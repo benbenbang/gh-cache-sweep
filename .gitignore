@@ -97,6 +97,8 @@ instance/
 .webassets-cache
 
 # Go Project
+/gh-cache-sweep
+/gh-cache-sweep.exe
 vendor
 _vendor*
 .pcg.yaml

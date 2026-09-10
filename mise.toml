@@ -1,0 +1,22 @@
+[tools]
+go = "1.27.1"
+
+# Keep task implementation in makefile; mise supplies the short command names.
+[tasks]
+help = "make help"
+check = "make check"
+fmt = "make fmt"
+vet = "make vet"
+test = "make test"
+run = "make run"
+version = "make version"
+build-local = "make build-local"
+build-platform = "make build-platform"
+build = "make build"
+install = "make install"
+clean = "make clean"
+tree = "make tree"
+
+[tasks.make]
+description = "Forward to any Make target"
+run = "make"
