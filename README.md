@@ -11,6 +11,71 @@ The command is `gh cache-sweep`, not `gh cache` (which is already a built-in com
 - A `gh` version supporting `gh cache delete --all --succeed-on-no-caches`. Compatibility is checked before deletion.
 - Access to discover the repositories and permission to delete their Actions caches. For classic tokens, the CLI documents the `repo` scope for deletion; team discovery may also require `read:org`. Fine-grained tokens need repository access and **Actions: write**, and appropriate organization permissions for team discovery. Organization SSO/token policies still apply. An ordinary workflow `GITHUB_TOKEN` is generally limited to its own repository, not your whole organization.
 
+## Install from release assets
+
+Prebuilt binaries are available in [release 1.0.0](https://github.com/benbenbang/gh-cache-sweep/releases/tag/1.0.0). No Go, Make, or mise installation is needed to use them; `gh` is still required for GitHub operations.
+
+### Install with GitHub CLI
+
+To register the command as `gh cache-sweep`, let GitHub CLI select and install the release asset:
+
+```sh
+gh extension install benbenbang/gh-cache-sweep --pin 1.0.0
+gh cache-sweep --version
+```
+
+### Download with curl (macOS / Linux)
+
+Choose the asset for your machine:
+
+| Platform | Asset |
+| --- | --- |
+| macOS, Apple Silicon | `gh-cache-sweep-darwin-arm64` |
+| macOS, Intel | `gh-cache-sweep-darwin-amd64` |
+| Linux, x86-64 | `gh-cache-sweep-linux-amd64` |
+| Linux, ARM64 | `gh-cache-sweep-linux-arm64` |
+| Windows, x86-64 | `gh-cache-sweep-windows-amd64` |
+| Windows, ARM64 | `gh-cache-sweep-windows-arm64` |
+
+For example, install **1.0.0 on Apple Silicon macOS** below. Change `ASSET` to the appropriate name from the table for Intel macOS or Linux:
+
+```sh
+(
+  set -eu
+  VERSION=1.0.0
+  ASSET=gh-cache-sweep-darwin-arm64
+  mkdir -p "$HOME/.local/bin"
+  TEMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$TEMP_DIR"' EXIT
+  curl --fail --location --show-error --retry 3 \
+    "https://github.com/benbenbang/gh-cache-sweep/releases/download/$VERSION/$ASSET" \
+    --output "$TEMP_DIR/gh-cache-sweep"
+  install -m 755 "$TEMP_DIR/gh-cache-sweep" "$HOME/.local/bin/gh-cache-sweep"
+)
+```
+
+The download completes in a temporary directory before replacing an existing installation. No `sudo` is needed. Add `~/.local/bin` to your `PATH`, or run the binary by its full path:
+
+```sh
+"$HOME/.local/bin/gh-cache-sweep" --version
+"$HOME/.local/bin/gh-cache-sweep" --org my-org --dry-run
+```
+
+This installs the **standalone `gh-cache-sweep` executable**, not a registered `gh` extension. Use the GitHub CLI installation above if you want `gh cache-sweep` with a space. To upgrade a curl installation, repeat the download with the desired release tag; `gh extension upgrade` does not manage it.
+
+### Download with curl (Windows PowerShell)
+
+The Windows release assets have no filename extension; save the download with an `.exe` suffix. For x86-64 Windows:
+
+```powershell
+curl.exe --fail --location --show-error --retry 3 --output gh-cache-sweep.exe https://github.com/benbenbang/gh-cache-sweep/releases/download/1.0.0/gh-cache-sweep-windows-amd64
+if ($LASTEXITCODE -ne 0) { throw "Download failed" }
+.\gh-cache-sweep.exe --version
+.\gh-cache-sweep.exe --org my-org --dry-run
+```
+
+For ARM64 Windows, use the `gh-cache-sweep-windows-arm64` asset instead. Move the executable to a directory on your `PATH` to run it from anywhere.
+
 ## Try from source
 
 From this checkout:
@@ -33,7 +98,7 @@ make install
 gh cache-sweep --help
 ```
 
-On Windows, `make build-local` produces `gh-cache-sweep.exe`. Rebuild after changing source with `make build-local`; a local extension installation points to that binary. The release workflow builds remote installation assets. Until a release has successfully uploaded its binaries, use source/local installation rather than `gh extension install OWNER/REPO`.
+On Windows, `make build-local` produces `gh-cache-sweep.exe`. Rebuild after changing source with `make build-local`; a local extension installation points to that binary. For installation without building from source, use the release assets described above.
 
 ## Usage
 
