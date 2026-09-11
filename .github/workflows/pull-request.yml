@@ -1,0 +1,110 @@
+name: "pull request workflow"
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - edited
+      - reopened
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    name: pre-commit checks
+    uses: benbenbang/reusable-workflows/.github/workflows/prek.yml@main
+    permissions:
+      contents: read
+      packages: read
+    with:
+      prek_skip: go-vet, go-unit-tests
+
+  check-change-files:
+    name: check-changed-files
+    outputs:
+      tests: ${{ steps.check-changes.outputs.tests_any_modified }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: detect changes requiring go ci
+        id: check-changes
+        uses: tj-actions/changed-files@2f7c5bfce28377bc069a65ba478de0a74aa0ca32 # v46.0.1
+        with:
+          files_yaml: |
+            tests:
+              - '*.go'
+              - '**/*.go'
+              - go.mod
+              - go.sum
+              - makefile
+              - mise.toml
+              - .github/workflows/*.yml
+
+  pr-labeler:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/labeler@v5
+        continue-on-error: true
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+
+  go-tests:
+    name: go ci
+    needs: check-change-files
+    if: ${{ needs.check-change-files.outputs.tests == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: jdx/mise-action@v3
+      - name: check
+        run: |
+          mise r check
+          git --no-pager diff --exit-code
+      - name: test
+        run: mise r test
+      - name: build
+        run: mise r build-local
+      - name: verify version
+        run: ./gh-cache-sweep --version
+
+  workflow-success:
+    name: workflow success
+    needs:
+      - pre-commit
+      - check-change-files
+      - go-tests
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: report required job results
+        env:
+          PRE_COMMIT_RESULT: ${{ needs.pre-commit.result }}
+          CHANGE_FILES_RESULT: ${{ needs.check-change-files.result }}
+          TESTS_REQUIRED: ${{ needs.check-change-files.outputs.tests }}
+          GO_CI_RESULT: ${{ needs.go-tests.result }}
+        run: |
+          echo "pre-commit: $PRE_COMMIT_RESULT"
+          echo "changed files: $CHANGE_FILES_RESULT"
+          echo "tests required: $TESTS_REQUIRED"
+          echo "go ci: $GO_CI_RESULT"
+          test "$PRE_COMMIT_RESULT" = "success"
+          test "$CHANGE_FILES_RESULT" = "success"
+          case "$TESTS_REQUIRED" in
+            true) test "$GO_CI_RESULT" = "success" ;;
+            false) test "$GO_CI_RESULT" = "skipped" ;;
+            *) echo "Unexpected tests output: $TESTS_REQUIRED"; exit 1 ;;
+          esac

@@ -1,0 +1,25 @@
+enhancement:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "main.go"
+          - "metadata.go"
+
+test:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*_test.go"
+
+workflows:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**/*"
+          - ".releaserc.json"
+          - ".pre-commit-config.yaml"
+          - "makefile"
+          - "mise.toml"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - "**/*.md"

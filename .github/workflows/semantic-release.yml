@@ -1,0 +1,131 @@
+name: semantic-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "If you are sure to launch a new release or repair its assets, put the value to true."
+        default: "false"
+        required: true
+        type: choice
+        options:
+          - "true"
+          - "false"
+      release_tag:
+        description: "Optional existing release tag: rebuild/upload its binaries without publishing a new release."
+        default: ""
+        required: false
+        type: string
+
+concurrency:
+  group: semantic-release-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate release source
+    if: ${{ inputs.prompt == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: validate existing release for repair
+        id: release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git check-ref-format "refs/tags/$RELEASE_TAG"
+          actual_tag=$(gh release view "$RELEASE_TAG" --json tagName --jq .tagName)
+          test "$actual_tag" = "$RELEASE_TAG"
+          printf 'tag=%s\n' "$actual_tag" >> "$GITHUB_OUTPUT"
+
+      - name: checkout release source
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.release_tag != '' && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
+          persist-credentials: false
+
+      - name: setup toolchain
+        uses: jdx/mise-action@v3
+
+      - name: check formatting and static analysis
+        run: |
+          mise r check
+          git --no-pager diff --exit-code
+
+      - name: test
+        run: mise r test
+
+      - name: validate all platform builds before publishing
+        env:
+          VERSION: ${{ inputs.release_tag || github.sha }}
+        run: mise r build "VERSION=$VERSION"
+
+  semantic-release:
+    name: semantic-release
+    needs: validate
+    uses: benbenbang/reusable-workflows/.github/workflows/semantic-release.yml@main
+    if: ${{ inputs.prompt == 'true' && github.ref == 'refs/heads/main' && inputs.release_tag == '' }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      statuses: read
+      packages: read
+    # The callee currently consumes inherited app credentials without declaring named secrets.
+    secrets: inherit
+    with:
+      new_version_title: "🧹 GitHub CLI Cache Sweep"
+
+  build-binaries:
+    name: build and upload release binaries
+    needs:
+      - validate
+      - semantic-release
+    # An explicit repair skips semantic-release; otherwise require successful publication.
+    if: >-
+      ${{ !cancelled() && needs.validate.result == 'success' &&
+          ((inputs.release_tag != '' && needs.semantic-release.result == 'skipped') ||
+           (needs.semantic-release.result == 'success' && needs.semantic-release.outputs.new_release == 'true')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.validate.outputs.release_tag || needs.semantic-release.outputs.new_release_tag }}
+    steps:
+      - name: checkout exact release tag
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: setup toolchain
+        uses: jdx/mise-action@v3
+
+      - name: build binaries with release metadata
+        run: mise r build "VERSION=$RELEASE_TAG"
+
+      - name: verify native binary metadata
+        run: |
+          ./build/gh-cache-sweep-linux-amd64 --version | tee version.txt
+          grep -Fx -- "gh-cache-sweep $RELEASE_TAG" version.txt
+
+      - name: upload binaries to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            --clobber \
+            build/gh-cache-sweep-darwin-amd64 \
+            build/gh-cache-sweep-darwin-arm64 \
+            build/gh-cache-sweep-linux-amd64 \
+            build/gh-cache-sweep-linux-arm64 \
+            build/gh-cache-sweep-windows-amd64 \
+            build/gh-cache-sweep-windows-arm64

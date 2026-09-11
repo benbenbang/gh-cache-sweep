@@ -33,7 +33,7 @@ make install
 gh cache-sweep --help
 ```
 
-On Windows, `make build-local` produces `gh-cache-sweep.exe`. Rebuild after changing source with `make build-local`; a local extension installation points to that binary. No remote release artifacts are configured yet, so use source/local installation rather than `gh extension install OWNER/REPO`.
+On Windows, `make build-local` produces `gh-cache-sweep.exe`. Rebuild after changing source with `make build-local`; a local extension installation points to that binary. The release workflow builds remote installation assets. Until a release has successfully uploaded its binaries, use source/local installation rather than `gh extension install OWNER/REPO`.
 
 ## Usage
 
@@ -132,5 +132,13 @@ The makefile remains the single source of implementation; `mise.toml` contains o
 Override `TEST_FLAGS` when needed, for example `mise r test TEST_FLAGS=-cover` to omit the race detector. `ARGS` is shell command-line text; only pass trusted values. Runtime safety rules still apply: `mise r run ARGS='--org my-org'` previews, and deletion requires explicit `--yes`.
 
 Tests use a scripted `gh` runner: they require neither credentials nor network access and never delete real caches.
+
+## CI and releases
+
+PR Go checks run when Go sources, module files, `makefile`, `mise.toml`, or workflow YAML files change. The required success job accepts a skipped Go job only when change detection explicitly says checks are unnecessary; detection errors still fail the workflow. CI uses the same mise/Make commands as local development and rejects formatting changes.
+
+To publish, dispatch **semantic-release** from `main` with `prompt=true` and leave `release_tag` empty. Tests, formatting checks, and all six platform builds must pass before semantic-release runs. Assets are then rebuilt from the exact published tag with its version injected and uploaded. The reusable release workflow requires the `TECHNICAL_APP_APP_ID` and `TECHNICAL_APP_PEM` secrets for its GitHub App; it still uses inherited secrets because the upstream workflow does not declare named secret inputs.
+
+Publication and asset upload are not atomic. If the upload/build job fails after publication, rerun the failed job, or dispatch from `main` with `prompt=true` and `release_tag` set to the existing tag. Repair validates the existing release, checks out its tag, tests and rebuilds it, and replaces its six binary assets using `--clobber` without creating a new release. The tag must include the mise/Make build tasks used by this workflow. Release and repair runs share a concurrency group to prevent overlapping writes.
 
 References: [`gh api`](https://cli.github.com/manual/gh_api), [`gh cache delete`](https://cli.github.com/manual/gh_cache_delete), [`gh extension install`](https://cli.github.com/manual/gh_extension_install).
