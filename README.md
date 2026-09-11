@@ -17,7 +17,7 @@ Prebuilt binaries are available in [release 1.0.0](https://github.com/benbenbang
 
 ### Install with GitHub CLI
 
-To register the command as `gh cache-sweep`, let GitHub CLI select and install the release asset:
+On macOS / Linux, register the command as `gh cache-sweep` by letting GitHub CLI select and install the release asset:
 
 ```sh
 gh extension install benbenbang/gh-cache-sweep --pin 1.0.0
@@ -61,11 +61,28 @@ The download completes in a temporary directory before replacing an existing ins
 "$HOME/.local/bin/gh-cache-sweep" --org my-org --dry-run
 ```
 
-This installs the **standalone `gh-cache-sweep` executable**, not a registered `gh` extension. Use the GitHub CLI installation above if you want `gh cache-sweep` with a space. To upgrade a curl installation, repeat the download with the desired release tag; `gh extension upgrade` does not manage it.
+The commands above install a **standalone `gh-cache-sweep` executable**. You can also register that downloaded binary with `gh`, as described below. To upgrade a curl installation, repeat the download with the desired release tag; `gh extension upgrade` does not manage it.
+
+### Register a curl-downloaded binary with gh (macOS / Linux)
+
+After the curl installation above, put the binary in a permanent directory named `gh-cache-sweep`, then run `gh extension install .` inside it:
+
+```sh
+mkdir -p "$HOME/.local/lib/gh-cache-sweep" &&
+  install -m 755 "$HOME/.local/bin/gh-cache-sweep" "$HOME/.local/lib/gh-cache-sweep/gh-cache-sweep" &&
+  (cd "$HOME/.local/lib/gh-cache-sweep" && gh extension install .)
+
+gh cache-sweep --version
+gh cache-sweep --org my-org --dry-run
+```
+
+No Git clone, `git init`, or Go build is required. Both the directory and executable must be named `gh-cache-sweep`. GitHub CLI links to that directory rather than copying it, so keep it in place. For updates, download the new binary and repeat the `install -m 755` copy into that directory; registration is only needed once. Local extensions cannot be upgraded with `gh extension upgrade` or pinned with `--pin`.
+
+If another `cache-sweep` extension is already registered, inspect it with `gh extension list` and remove it with `gh extension remove cache-sweep` only if you intend to replace that installation.
 
 ### Download with curl (Windows PowerShell)
 
-The Windows release assets have no filename extension; save the download with an `.exe` suffix. For x86-64 Windows:
+The Windows 1.0.0 release assets have no filename extension, so GitHub CLI's automatic asset selection does not recognize them as Windows binaries. Download directly and save with an `.exe` suffix instead. For x86-64 Windows:
 
 ```powershell
 curl.exe --fail --location --show-error --retry 3 --output gh-cache-sweep.exe https://github.com/benbenbang/gh-cache-sweep/releases/download/1.0.0/gh-cache-sweep-windows-amd64
