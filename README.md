@@ -1,4 +1,4 @@
-# gh-cache-sweep
+# gh cache-sweep 🧹
 
 Preview or delete GitHub Actions caches across an organization's repositories, a user's repositories, a team's repositories, or one repository. Written in Go using only the standard library; delegates authentication and cache deletion to [GitHub CLI](https://github.com/cli/cli).
 
